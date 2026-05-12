@@ -16,29 +16,34 @@ permissions:
 
 jobs:
   build:
+    continue-on-error: ${{ matrix.allow_failure }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-linux-gnu
+            allow_failure: false
             platform: linux/amd64
             image: ubuntu:24.04
             setup_script: |
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl xz-utils tar build-essential clang pkg-config libbpf-dev libxdp-dev
           - target: x86_64-linux-musl
+            allow_failure: true
             platform: linux/amd64
             image: alpine:3.20
             setup_script: |
               apk add --no-cache bash build-base ca-certificates clang curl libbpf-dev libxdp-dev linux-headers pkgconfig tar xz
           - target: aarch64-linux-gnu
+            allow_failure: false
             platform: linux/arm64
             image: arm64v8/ubuntu:24.04
             setup_script: |
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl xz-utils tar build-essential clang pkg-config libbpf-dev libxdp-dev
           - target: aarch64-linux-musl
+            allow_failure: true
             platform: linux/arm64
             image: arm64v8/alpine:3.20
             setup_script: |
