@@ -45,12 +45,20 @@ detect_host_target() {
             ;;
     esac
 
-    if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
+    if command -v ldd >/dev/null 2>&1; then
+        if ldd --version 2>&1 | grep -qi musl; then
+            libc="musl"
+        elif ldd /bin/sh 2>&1 | grep -qi musl; then
+            libc="musl"
+        fi
+    fi
+
+    if [[ -z "${libc:-}" ]] && command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+        libc="gnu"
+    elif [[ -z "${libc:-}" ]] && command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi 'glibc\|gnu libc'; then
+        libc="gnu"
+    elif [[ -z "${libc:-}" ]] && ls /lib/libc.musl-* /usr/lib/libc.musl-* >/dev/null 2>&1; then
         libc="musl"
-    elif command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
-        libc="gnu"
-    elif command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi 'glibc\|gnu libc'; then
-        libc="gnu"
     else
         echo "Unable to detect host libc variant" >&2
         exit 1
