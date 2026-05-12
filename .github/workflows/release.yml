@@ -1,0 +1,106 @@
+name: Release weapon-scanner
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to publish
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-linux-gnu
+            platform: linux/amd64
+            image: ubuntu:24.04
+            setup_script: |
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl xz-utils tar build-essential clang pkg-config libbpf-dev libxdp-dev
+          - target: x86_64-linux-musl
+            platform: linux/amd64
+            image: alpine:3.20
+            setup_script: |
+              apk add --no-cache bash build-base ca-certificates clang curl libbpf-dev libxdp-dev linux-headers pkgconfig tar xz
+          - target: aarch64-linux-gnu
+            platform: linux/arm64
+            image: arm64v8/ubuntu:24.04
+            setup_script: |
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl xz-utils tar build-essential clang pkg-config libbpf-dev libxdp-dev
+          - target: aarch64-linux-musl
+            platform: linux/arm64
+            image: arm64v8/alpine:3.20
+            setup_script: |
+              apk add --no-cache bash build-base ca-certificates clang curl libbpf-dev libxdp-dev linux-headers pkgconfig tar xz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - name: Build release artifact
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version != '' && github.event.inputs.version || github.ref_name }}
+          TARGET: ${{ matrix.target }}
+          PLATFORM: ${{ matrix.platform }}
+          IMAGE: ${{ matrix.image }}
+          SETUP_SCRIPT: ${{ matrix.setup_script }}
+        run: |
+          docker run --rm \
+            --platform "$PLATFORM" \
+            -e RELEASE_VERSION \
+            -e TARGET \
+            -e SETUP_SCRIPT \
+            -v "$PWD:/work" \
+            -w /work \
+            "$IMAGE" \
+            sh -lc '
+              set -e
+              eval "$SETUP_SCRIPT"
+              arch="$(uname -m)"
+              curl -fsSL "https://ziglang.org/download/0.13.0/zig-linux-${arch}-0.13.0.tar.xz" -o /tmp/zig.tar.xz
+              mkdir -p /opt/zig
+              tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
+              export PATH="/opt/zig:$PATH"
+              bash ./scripts/build-release.sh --version "$RELEASE_VERSION" --dist-dir /work/dist --target "$TARGET"
+            '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/weapon-scanner-${{ matrix.target }}.tar.gz
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate combined checksums
+        run: |
+          cd dist
+          sha256sum weapon-scanner-*.tar.gz > weapon-scanner-checksums.txt
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version != '' && github.event.inputs.version || github.ref_name }}
+          files: |
+            dist/weapon-scanner-*.tar.gz
+            dist/weapon-scanner-checksums.txt

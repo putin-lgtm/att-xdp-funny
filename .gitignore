@@ -1,0 +1,13 @@
+.zig-cache/
+zig-out/
+dist/
+.vscode/
+
+*.o
+
+/main
+/monitor
+/sniper
+/weapon_scanner
+/weapon_scanner_copy
+/weapon_scanner_probe

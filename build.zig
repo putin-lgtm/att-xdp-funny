@@ -30,9 +30,30 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
+    const scanner_mod = b.createModule(.{
+        .root_source_file = b.path("weapon_scanner.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    const scanner = b.addExecutable(.{
+        .name = "weapon-scanner",
+        .root_module = scanner_mod,
+    });
+    scanner.linkSystemLibrary("bpf", .{});
+    scanner.linkSystemLibrary("xdp", .{});
+
+    b.installArtifact(scanner);
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
 
     const run_step = b.step("run", "Chay chuong trinh sniper");
     run_step.dependOn(&run_cmd.step);
+
+    const run_scanner_cmd = b.addRunArtifact(scanner);
+    run_scanner_cmd.step.dependOn(b.getInstallStep());
+
+    const run_scanner_step = b.step("run-weapon-scanner", "Chay weapon scanner");
+    run_scanner_step.dependOn(&run_scanner_cmd.step);
 }
